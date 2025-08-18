@@ -20,11 +20,16 @@ def univariate_feature_summary(df: pd.DataFrame, lower_pct=5, upper_pct=95) -> p
             max_val = series.max()
 
             # Percentile-based outlier detection
-            lower_bound = np.percentile(series.dropna(), lower_pct)
-            upper_bound = np.percentile(series.dropna(), upper_pct)
-            outliers = series[(series < lower_bound) | (series > upper_bound)]
-            n_outliers = outliers.count()
-            perc_outliers = (n_outliers / len(series)) * 100
+            non_na = series.dropna()
+            if not non_na.empty:
+                lower_bound = np.percentile(non_na, lower_pct)
+                upper_bound = np.percentile(non_na, upper_pct)
+                outliers = non_na[(non_na < lower_bound) | (non_na > upper_bound)]
+                n_outliers = outliers.count()
+                perc_outliers = (n_outliers / len(series)) * 100
+            else:
+                lower_bound = upper_bound = np.nan
+                n_outliers = perc_outliers = np.nan
         else:
             var = mean = median = std = min_val = max_val = np.nan
             lower_bound = upper_bound = np.nan
@@ -32,8 +37,8 @@ def univariate_feature_summary(df: pd.DataFrame, lower_pct=5, upper_pct=95) -> p
 
         mode_val = series.mode(dropna=True)
         if not mode_val.empty:
-            top_value = mode_val.iloc[0]
-            top_freq = (series == top_value).sum()
+            top_value = str(mode_val.iloc[0])  # 🔑 ensure string for Arrow compatibility
+            top_freq = (series == mode_val.iloc[0]).sum()
         else:
             top_value = np.nan
             top_freq = np.nan
@@ -58,6 +63,7 @@ def univariate_feature_summary(df: pd.DataFrame, lower_pct=5, upper_pct=95) -> p
             "%outliers": perc_outliers
         })
     return pd.DataFrame(summary)
+
 
 def show_data_summary(df: pd.DataFrame) -> pd.DataFrame:
     st.subheader("📋 Data Summary (Univariate)")
@@ -89,8 +95,7 @@ def show_data_summary(df: pd.DataFrame) -> pd.DataFrame:
     k3.metric("Cols ≥50% missing", f"{high_missing_cols:,}")
     k4.metric("Cols with n_unique = 1", f"{n_unique_eq_1:,}")
 
-
-    # Highlighting (lighter shades, black text)
+    # Highlighting
     def highlight_missing(val):
         try:
             v = float(val)
@@ -103,7 +108,7 @@ def show_data_summary(df: pd.DataFrame) -> pd.DataFrame:
             v = float(val)
         except Exception:
             return ""
-        return "background-color: #fff2cc; color: black;" if v >= 10 else ""  # highlight if >=10%
+        return "background-color: #fff2cc; color: black;" if v >= 10 else ""
 
     styled = (
         df_summary.style
