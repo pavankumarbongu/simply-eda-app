@@ -1,10 +1,10 @@
 import os
 import streamlit as st
-from data_load import show_data_load
-from correlations import show_correlations
-from lift_analysis import show_lift_analysis
-from data_summary import show_data_summary
-from plots import show_plots  #
+from src.data_load import show_data_load
+from src.correlations import show_correlations
+from src.lift_analysis import show_lift_analysis
+from src.data_summary import show_data_summary
+from src.plots import show_plots
 
 # ---------------------- Page Setup ----------------------
 st.set_page_config(page_title="Correlation Analyzer", layout="wide")
@@ -62,4 +62,4 @@ with tabs[5]:
 
 # ---------------------- Main Entry ----------------------
 if __name__ == "__main__":
-    os.system("streamlit run analysis/eda_app/app.py --server.runOnSave true")
+    os.system("streamlit run app.py")
