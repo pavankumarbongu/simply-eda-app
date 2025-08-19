@@ -7,41 +7,27 @@ This project uses Poetry and Conda for Python environment and dependency managem
 cd simply-eda-app
 ```
 
-## 2. (Optional) Create and activate a Conda environment
-```sh
-make conda-create
-make conda-activate
-# Or manually:
-conda activate $(CURDIR)/.simply-eda-app-env
-```
-
-## 3. Install Poetry and all dependencies
+## 2. Install Poetry and all dependencies
 ```sh
 make install
 ```
 This will:
 - Install Poetry
-- Add the Poetry export plugin
 - Lock and install dependencies
 - Set the Python version for Poetry
 
-## 4. Activate the Poetry environment
+## 3. Activate the Poetry environment
 ```sh
 make activate
 ```
 Copy and run the command printed to activate the Poetry virtual environment.
 
-## 5. Run the application
+## 4. Run the application
 ```sh
 make run
 ```
 This will run `app.py` using the Poetry environment.
 
-## 6. Export requirements (for pip or deployment)
-```sh
-make requirements
-```
-This will generate `requirements.txt` from Poetry dependencies.
 
 ---
 
