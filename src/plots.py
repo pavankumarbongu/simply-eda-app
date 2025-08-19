@@ -4,7 +4,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 
-def show_plots():
+def show_plots(df):
     st.subheader("📈 Interactive Data Visualizations")
 
     df = st.session_state.get("df")
@@ -76,7 +76,7 @@ def show_plots():
                 except Exception as e:
                     st.info(f"⚠️ Could not plot boxplot: {e}")
 
-# ---------------------- MULTIVARIATE ----------------------
+    # ---------------------- MULTIVARIATE ----------------------
     elif plot_type == "Multivariate":
         st.markdown("### 🔍 Multivariate Analysis (X, Y, and Color + Extra Hover Info)")
 

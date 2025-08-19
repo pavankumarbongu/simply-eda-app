@@ -16,25 +16,26 @@ tabs = st.tabs([
     "Correlations",
     "Lift Analysis",
     "Data Summary",
-    "Plots",          # <-- NEW TAB
+    "Plots",
     "Raw Data",
 ])
 
 # ---------------------- Data Load Tab ----------------------
 with tabs[0]:
-    df, target_col, numeric_cols, valid_default_corr_features = show_data_load()
+    # Only load df — target selection is now handled inside correlations & lift analysis
+    df = show_data_load()
 
 # ---------------------- Correlations Tab ----------------------
 with tabs[1]:
     if df is not None:
-        show_correlations(df, numeric_cols, target_col, valid_default_corr_features)
+        show_correlations(df)
     else:
         st.warning("⚠️ Load data first from the Data Load tab.")
 
 # ---------------------- Lift Analysis Tab ----------------------
 with tabs[2]:
     if df is not None:
-        show_lift_analysis(df, target_col)
+        show_lift_analysis(df)
     else:
         st.warning("⚠️ Load data first from the Data Load tab.")
 
@@ -48,7 +49,7 @@ with tabs[3]:
 # ---------------------- Plots Tab ----------------------
 with tabs[4]:
     if df is not None:
-        show_plots()
+        show_plots(df)   # <-- pass df so plotting functions can use it
     else:
         st.warning("⚠️ Load data first from the Data Load tab.")
 

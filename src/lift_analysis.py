@@ -1,39 +1,41 @@
 import streamlit as st
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 from sklearn.impute import SimpleImputer
-import pandas as pd
 
 @st.cache_data(show_spinner=False, persist=True)
 def build_lift_reports(df, target, impute_target, target_imp, impute_feat, feat_imp):
     df_clean = df.copy()
 
-    # Impute target if requested
+    # --- Impute target if requested ---
     if impute_target and df_clean[target].isna().any():
         df_clean[target] = SimpleImputer(strategy=target_imp).fit_transform(df_clean[[target]]).ravel()
 
-    # Impute numeric features if requested
+    # --- Impute numeric features if requested ---
     num_cols = df_clean.select_dtypes(include="number").columns.tolist()
     if impute_feat:
         feat_cols = [c for c in num_cols if c != target and df_clean[c].isna().any()]
         if feat_cols:
             df_clean[feat_cols] = SimpleImputer(strategy=feat_imp).fit_transform(df_clean[feat_cols])
 
-    # Drop rows with missing target
+    # --- Drop rows with missing target ---
     df_clean = df_clean.dropna(subset=[target])
 
-    # Bin target
+    # --- Bin target into good/bad using median split ---
     med = df_clean[target].median()
     df_clean["target_bin"] = pd.cut(df_clean[target], [-np.inf, med, np.inf], labels=["bad", "good"])
     overall = (df_clean["target_bin"] == "good").mean()
 
-    # Build lift tables per feature
+    # --- Build lift tables per feature ---
     reports = {}
     for feat in (c for c in num_cols if c != target):
-        if df_clean[feat].notna().sum() < 10:
+        if df_clean[feat].notna().sum() < 10:  # skip sparse features
             continue
         try:
-            df_clean[f"{feat}_bin"] = pd.qcut(df_clean[feat].rank(method="first"), q=10, duplicates="drop")
+            df_clean[f"{feat}_bin"] = pd.qcut(
+                df_clean[feat].rank(method="first"), q=10, duplicates="drop"
+            )
             bin_df = (
                 df_clean.groupby(f"{feat}_bin")["target_bin"]
                 .apply(lambda x: (x == "good").mean())
@@ -47,15 +49,35 @@ def build_lift_reports(df, target, impute_target, target_imp, impute_feat, feat_
     return reports
 
 
-def show_lift_analysis(df, target_col):
-    import pandas as pd
-
+def show_lift_analysis(df, target_col=None):
     st.subheader("📊 Lift Analysis — Feature Predictive Power")
-    if df is None or not target_col:
-        st.warning("Load data and select a target first.")
+
+    # --- Validate Data ---
+    if df is None or df.empty:
+        st.warning("Load data first.")
         return
 
-    # Imputation controls
+    numeric_cols = df.select_dtypes(include="number").columns.tolist()
+    if not numeric_cols:
+        st.warning("No numeric columns detected.")
+        return
+
+    # --- Target selector inside this function ---
+    st.markdown("### 🎯 Select Target Variable")
+    target_col = st.selectbox(
+        "Choose target column",
+        numeric_cols,
+        index=0 if target_col is None else (
+            numeric_cols.index(target_col) if target_col in numeric_cols else 0
+        ),
+        key="lift_target_selector"
+    )
+
+    if not target_col or target_col not in df.columns:
+        st.warning("Please select a valid target column.")
+        return
+
+    # --- Imputation controls ---
     col1, col2 = st.columns(2)
     with col1:
         im_t = st.checkbox("Impute missing target", value=False)
@@ -64,7 +86,7 @@ def show_lift_analysis(df, target_col):
         im_f = st.checkbox("Impute missing features", value=True)
         feat_m = st.selectbox("Feature method", ["mean", "median", "most_frequent"], index=1, disabled=not im_f)
 
-    # Build lift tables automatically when settings change
+    # --- Build lift reports + cache meta to avoid recompute ---
     settings = (target_col, im_t, targ_m, im_f, feat_m)
     if st.session_state.get("lift_meta") != settings:
         with st.spinner("Building lift tables…"):
@@ -76,9 +98,10 @@ def show_lift_analysis(df, target_col):
         st.error("❌ No valid features for lift analysis.")
         return
 
+    # --- Select feature ---
     col1, col2 = st.columns([3, 1])
     with col1:
-        selected_feat = st.selectbox("🎯 Select feature for lift analysis", list(lift_reports.keys()), key="lift_feature_selector")
+        selected_feat = st.selectbox("🎯 Select feature", list(lift_reports.keys()), key="lift_feature_selector")
     with col2:
         show_table = st.checkbox("📋 Show lift table", value=True)
 
@@ -86,6 +109,8 @@ def show_lift_analysis(df, target_col):
         return
 
     lift_df = lift_reports[selected_feat]
+
+    # --- Table view ---
     if show_table:
         def lift_cell_color(val):
             if val > 1:
@@ -101,9 +126,9 @@ def show_lift_analysis(df, target_col):
             .applymap(lift_cell_color, subset=['lift'])
         )
         st.write(f"**Lift Table for feature: {selected_feat}**")
-        st.dataframe(styled_df)
+        st.dataframe(styled_df, use_container_width=True)
 
-    # Plot
+    # --- Plot ---
     fig = go.Figure(go.Bar(
         x=lift_df[f'{selected_feat}_bin'].astype(str),
         y=lift_df['lift'],
@@ -124,7 +149,7 @@ def show_lift_analysis(df, target_col):
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # Summary metrics
+    # --- Summary metrics ---
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("📈 Lift Summary")
@@ -141,7 +166,7 @@ def show_lift_analysis(df, target_col):
         strength = "High" if lift_std > 0.3 else "Medium" if 0.15 < lift_std <= 0.3 else "Low"
         st.metric("Feature Strength", strength)
 
-    # Single interpretation block
+    # --- Interpretation ---
     st.info(
         "📖 **Interpretation**\n"
         "- 🟢 **Lift > 1**: Bin has higher ‘good’ rate than average\n"
