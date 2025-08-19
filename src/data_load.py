@@ -16,7 +16,7 @@ from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any, Optional, Union
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
- 
+import glob
 
 default_path = "/home/oneai/analysis/eda_app/data/lantus_stage_08_data.csv"  
 
@@ -38,20 +38,63 @@ def show_data_load(default_target: str = "ge_dup_p2_c3p1_3k_bioreactor_vcd_day3"
         plant_id = st.text_input("Enter Plant ID", value="")
         stage_name = st.text_input("Enter Stage", value="")
 
-        if st.button("Load & Pivot Data"):
-            with st.spinner("Fetching data from Snowflake..."):
-                try:
-                    df_raw = read_source_table(schema_name, table_name)
-                    if plant_id:
-                        df_raw = df_raw[df_raw["plant_id"].str.lower() == plant_id.strip().lower()]
-                    if stage_name:
-                        df_raw = df_raw[df_raw["stage"].str.lower() == stage_name.strip().lower()]
-                    df = pivot_master_data(df_raw)
-                    st.session_state["df"] = df
-                    st.success(f"✅ Loaded {df.shape[0]:,} rows and {df.shape[1]:,} columns from Snowflake.")
-                except Exception as e:
-                    st.error(f"❌ Error loading data: {e}")
-                    st.code(traceback.format_exc(), language="python")
+        # Define save path
+        if plant_id and stage_name:
+            folder_path = Path(f"data/{plant_id}/{stage_name}")
+            folder_path.mkdir(parents=True, exist_ok=True)  # auto-create if not exists
+            file_path = folder_path / f"{plant_id}_{stage_name}_data.csv"
+        else:
+            file_path = None
+
+        col1, col2 = st.columns(2)
+
+        # ----------- Load New Button -----------
+        if col1.button("🔄 Load New from Snowflake"):
+            if not (plant_id and stage_name):
+                st.error("❌ Please enter both Plant ID and Stage to continue.")
+            else:
+                with st.spinner("Fetching NEW data from Snowflake..."):
+                    try:
+                        df_raw = read_source_table(schema_name, table_name,plant_id,stage_name)
+
+
+                        df = pivot_master_data(df_raw)
+
+                        # Save to local file
+                        df.to_csv(file_path, index=False)
+
+                        st.session_state["df"] = df
+                        st.success(f"✅ Loaded {df.shape[0]:,} rows & {df.shape[1]:,} cols from Snowflake and saved to {file_path}")
+                    except Exception as e:
+                        st.error(f"❌ Error loading from Snowflake: {e}")
+                        st.code(traceback.format_exc(), language="python")
+
+        # ----------- Load Existing Button -----------
+        if col2.button("📂 Load Existing from File"):
+            if not (plant_id and stage_name):
+                st.error("❌ Please enter both Plant ID and Stage to continue.")
+            else:
+                if file_path.exists():
+                    try:
+                        df = pd.read_csv(file_path)
+                        st.session_state["df"] = df
+                        st.success(f"✅ Loaded data from {file_path}")
+                    except Exception as e:
+                        st.error(f"❌ Error reading existing file: {e}")
+                        st.code(traceback.format_exc(), language="python")
+                else:
+                    st.warning("⚠️ File not found locally. Fetching from Snowflake instead...")
+                    try:
+                        df_raw = read_source_table(schema_name, table_name,plant_id,stage_name)
+
+                        df = pivot_master_data(df_raw)
+                        df.to_csv(file_path, index=False)
+
+                        st.session_state["df"] = df
+                        st.success(f"✅ Loaded from Snowflake & saved to {file_path}")
+                    except Exception as e:
+                        st.error(f"❌ Error fetching from Snowflake: {e}")
+                        st.code(traceback.format_exc(), language="python")
 
     else:
         # ---------------- Manual Upload Option (Default) ----------------
@@ -224,22 +267,30 @@ def _query_snowflake_table(sql_query: str) -> pd.DataFrame:
         connection.close()
 
 
-def read_source_table(schema_name: str, table_name: str) -> pd.DataFrame:
+def read_source_table(schema_name: str, table_name: str, plant_id: Optional[str] = None, stage_name: Optional[str] = None) -> pd.DataFrame:
     """
-    This function reads an entire table from SimplY snowflake
-    defined by schema_name and table_name.
+    Reads data from Snowflake with optional filters for plant_id and stage.
 
-    This is a generic and implicit function that executes a SELECT * statement.
-
-    @param schema_name: str. Name of the schema in snowflake to read from
-    @param table_name: str. Name of the table in snowflake to read from
+    @param schema_name: str. Name of the schema in Snowflake
+    @param table_name: str. Name of the table in Snowflake
+    @param plant_id: Optional[str]. Plant ID to filter
+    @param stage_name: Optional[str]. Stage to filter
     @return: pd.DataFrame
     """
-    query_load_source_tables = f"""
-        select * from {schema_name}."{table_name}"
-    """
-    data_frame = _query_snowflake_table(query_load_source_tables)
+
+    # Base query
+    query = f'SELECT * FROM {schema_name}."{table_name}" WHERE 1=1'
+
+    # Add filters if provided
+    if plant_id:
+        query += f" AND LOWER(plant_id) = '{plant_id.strip().lower()}'"
+    if stage_name:
+        query += f" AND LOWER(stage) = '{stage_name.strip().lower()}'"
+
+    # Run query
+    data_frame = _query_snowflake_table(query)
     return data_frame
+
 
 
 def pivot_master_data(master_data: pd.DataFrame) -> pd.DataFrame:
