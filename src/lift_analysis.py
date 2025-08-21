@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from sklearn.impute import SimpleImputer
 
 @st.cache_data(show_spinner=False, persist=True)
-def build_lift_reports(df, target, impute_target, target_imp, impute_feat, feat_imp):
+def build_lift_reports(df, target, impute_target, target_imp, impute_feat, feat_imp, feat_bins):
     df_clean = df.copy()
 
     # --- Impute target if requested ---
@@ -22,7 +22,7 @@ def build_lift_reports(df, target, impute_target, target_imp, impute_feat, feat_
     # --- Drop rows with missing target ---
     df_clean = df_clean.dropna(subset=[target])
 
-    # --- Bin target into good/bad using median split ---
+    # --- Bin target into 2 classes using median ---
     med = df_clean[target].median()
     df_clean["target_bin"] = pd.cut(df_clean[target], [-np.inf, med, np.inf], labels=["bad", "good"])
     overall = (df_clean["target_bin"] == "good").mean()
@@ -34,7 +34,7 @@ def build_lift_reports(df, target, impute_target, target_imp, impute_feat, feat_
             continue
         try:
             df_clean[f"{feat}_bin"] = pd.qcut(
-                df_clean[feat].rank(method="first"), q=10, duplicates="drop"
+                df_clean[feat].rank(method="first"), q=feat_bins, duplicates="drop"
             )
             bin_df = (
                 df_clean.groupby(f"{feat}_bin")["target_bin"]
@@ -54,12 +54,12 @@ def show_lift_analysis(df, target_col=None):
 
     # --- Validate Data ---
     if df is None or df.empty:
-        st.warning("Load data first.")
+        st.warning("⚠️ Load data first.")
         return
 
     numeric_cols = df.select_dtypes(include="number").columns.tolist()
     if not numeric_cols:
-        st.warning("No numeric columns detected.")
+        st.warning("⚠️ No numeric columns detected.")
         return
 
     # --- Target selector inside this function ---
@@ -77,20 +77,24 @@ def show_lift_analysis(df, target_col=None):
         st.warning("Please select a valid target column.")
         return
 
-    # --- Imputation controls ---
-    col1, col2 = st.columns(2)
+    # --- Imputation + Feature bin controls ---
+    col1, col2, col3 = st.columns(3)
     with col1:
         im_t = st.checkbox("Impute missing target", value=False)
         targ_m = st.selectbox("Target method", ["mean", "median", "most_frequent"], index=1, disabled=not im_t)
     with col2:
         im_f = st.checkbox("Impute missing features", value=True)
         feat_m = st.selectbox("Feature method", ["mean", "median", "most_frequent"], index=1, disabled=not im_f)
+    with col3:
+        feat_bins = st.selectbox("Feature Bins (qcut)", [2,3,4,5,6,7,8,9,10], index=1)
 
-    # --- Build lift reports + cache meta to avoid recompute ---
-    settings = (target_col, im_t, targ_m, im_f, feat_m)
+    # --- Build lift reports + cache meta ---
+    settings = (target_col, im_t, targ_m, im_f, feat_m, feat_bins)
     if st.session_state.get("lift_meta") != settings:
-        with st.spinner("Building lift tables…"):
-            st.session_state.lift_reports = build_lift_reports(df, target_col, im_t, targ_m, im_f, feat_m)
+        with st.spinner("🔄 Building lift tables…"):
+            st.session_state.lift_reports = build_lift_reports(
+                df, target_col, im_t, targ_m, im_f, feat_m, feat_bins
+            )
             st.session_state.lift_meta = settings
 
     lift_reports = st.session_state.get("lift_reports", {})
@@ -173,4 +177,23 @@ def show_lift_analysis(df, target_col=None):
         "- 🔴 **Lift < 1**: Bin has lower ‘good’ rate than average\n"
         "- 🟡 **Lift ≈ 1**: Bin matches overall rate\n"
         "- **Feature Strength** uses lift variance: High (σ > 0.3), Medium (0.15–0.3), Low (≤ 0.15)"
+
+        "**Procedure Steps:**\n"
+        "1. **Bin target into good/bad:**\n"
+        "   - Example: if using median split →\n"
+        "2. **Bin feature values:**\n"
+        "   - Use quantile binning (qcut) into *k* bins.\n\n"
+        "3. **Compute good rate per bin:**\n"
+        "   $$\n"
+        "   \\text{GoodRate}_b = \\frac{\\#(y=\\text{good in bin } b)}{\\#(\\text{total in bin } b)}\n"
+        "   $$\n\n"
+        "4. **Compute overall good rate:**\n"
+        "   $$\n"
+        "   \\text{OverallGoodRate} = \\frac{\\#(y=\\text{good})}{\\#(\\text{total})}\n"
+        "   $$\n\n"
+        "5. **Compute Lift per bin:**\n"
+        "   $$\n"
+        "   \\text{Lift}_b = \\frac{\\text{GoodRate}_b}{\\text{OverallGoodRate}}\n"
+        "   $$\n\n"
+
     )

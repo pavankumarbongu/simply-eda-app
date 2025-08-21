@@ -21,7 +21,6 @@ conda activate /home/oneai/env-eda-app
 ```sh
 make install
 ```
-Copy and run the command printed to activate the Poetry virtual environment.
 
 ## 4. Run the application
 ```sh

@@ -20,7 +20,7 @@ import glob
 
 from src.config import PLANT_SITE_MAP, SCHEMA_NAME, TABLE_NAME
 
-default_path = "/home/oneai/simply-eda-app/data/frankfurt/08/frankfurt_08_data.csv"  
+default_path = "/home/oneai/simply-eda-app/data/Frankfurt/08/Frankfurt_08_data.csv"  
 
 import os
 import traceback
@@ -28,7 +28,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-def show_data_load(default_path: str = "/home/oneai/simply-eda-app/data/frankfurt/08/frankfurt_08_data.csv") -> pd.DataFrame:
+def show_data_load(default_path: str=default_path) -> pd.DataFrame:
     """
     Display the Data Load tab (defaulting to Manual Upload with default file path loaded).
     Handles both Snowflake and Manual Upload but only returns the dataframe.
